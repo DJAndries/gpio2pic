@@ -1,6 +1,7 @@
 #include "shell.h"
 #include "log.h"
 #include "cmd.h"
+#include "hex.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -15,6 +16,7 @@
 #define RESET "reset"
 #define ENTER_PROG_MODE "enterp"
 #define EXIT_PROG_MODE "exitp"
+#define PROG_HEX "hex"
 #define RUN_BATCH "runbatch"
 #define EXIT "exit"
 #define REPEAT "r"
@@ -79,6 +81,14 @@ static int run_batch_file() {
 	return 0;
 }
 
+static int process_hex_file() {
+	if (arg[0] == 0) { 
+		dlog(LOG_ERROR, "Hex filename not provided");
+		return 1;
+	}
+	return program_hex_file(arg);
+}
+
 static int process_cmd() {
 	if (strcmp(cmd, LOAD_PROG) == 0) {
 		if (parse_hex_data()) return 2;
@@ -102,6 +112,8 @@ static int process_cmd() {
 		set_prog_mode(0);
 	} else if (strcmp(cmd, RUN_BATCH) == 0) {
 		run_batch_file();
+	} else if (strcmp(cmd, PROG_HEX) == 0) {
+		process_hex_file();
 	} else if (strcmp(cmd, RESET) == 0) {
 		trigger_reset();
 	} else if (strcmp(cmd, EXIT) == 0) {
