@@ -14,6 +14,8 @@ int read_from_user_data(uint16_t* data);
 
 int read_from_prog_data(uint16_t* data);
 
+int set_prog_mode(char on);
+
 int begin_programming();
 
 int inc_addr();

@@ -3,11 +3,11 @@
 #include "shell.h"
 
 int main() {
-	if (init_gpio(17, 27)) {
+	if (init_gpio(17, 27, 5, 6, 1)) {
 		return 1;
 	}
 
-	init_cmd(50);
+	init_cmd(4);
 
 	start_shell();
 

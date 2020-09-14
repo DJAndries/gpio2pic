@@ -82,9 +82,22 @@ int read_from_prog_data(uint16_t* data) {
 	return 0;
 }
 
+int set_prog_mode(char on) {
+	if (on) {
+		if (set_pgm_line(1)) return 1;
+		usleep(10);
+		if (set_mclr_line(1)) return 1;
+	} else {
+		if (set_mclr_line(0)) return 1;
+		usleep(10);
+		if (set_pgm_line(0)) return 1;
+	}
+	return 0;
+}
+
 int begin_programming() {
 	if (send_with_clock(BEGIN_PROGRAM, CMD_BITS)) return 1;
-	usleep(1000 * 1000);
+	usleep(4000);
 	return 0;
 }
 
