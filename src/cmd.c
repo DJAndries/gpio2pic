@@ -12,11 +12,11 @@
 #define CMD_BITS 6
 #define DATA_BITS 16
 
-static int period_ms;
+static unsigned long period_us;
 
 static void period_sleep() {
-	dlog(LOG_DEBUG, "Wait %d ms", period_ms / 2);
-	usleep((period_ms / 2) * 1000);
+	dlog(LOG_DEBUG, "Wait %lu us", period_us / 2);
+	usleep(period_us / 2);
 }
 
 static int send_with_clock(uint16_t data, size_t bit_length) {
@@ -52,8 +52,8 @@ static int read_with_clock(uint16_t* data) {
 	return 0;
 }
 
-void init_cmd(int period_ms_init) {
-	period_ms = period_ms_init;
+void init_cmd(unsigned long period_us_init) {
+	period_us = period_us_init;
 }
 
 int write_to_user_data(uint16_t data) {
@@ -95,9 +95,17 @@ int set_prog_mode(char on) {
 	return 0;
 }
 
+int trigger_reset() {
+	if (set_mclr_line(0)) return 1;
+	usleep(10000);
+	if (set_mclr_line(1)) return 1;
+	usleep(10000);
+	return 0;
+}
+
 int begin_programming() {
 	if (send_with_clock(BEGIN_PROGRAM, CMD_BITS)) return 1;
-	usleep(4000);
+	usleep(8000);
 	return 0;
 }
 

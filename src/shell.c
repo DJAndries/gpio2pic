@@ -12,6 +12,7 @@
 #define READ_DATA "readd"
 #define INC_ADDR "inc"
 #define BEGIN_PROG "prog"
+#define RESET "reset"
 #define ENTER_PROG_MODE "enterp"
 #define EXIT_PROG_MODE "exitp"
 #define RUN_BATCH "runbatch"
@@ -101,6 +102,8 @@ static int process_cmd() {
 		set_prog_mode(0);
 	} else if (strcmp(cmd, RUN_BATCH) == 0) {
 		run_batch_file();
+	} else if (strcmp(cmd, RESET) == 0) {
+		trigger_reset();
 	} else if (strcmp(cmd, EXIT) == 0) {
 		return -1;
 	} else {

@@ -7,7 +7,7 @@ int main() {
 		return 1;
 	}
 
-	init_cmd(4);
+	init_cmd(2);
 
 	start_shell();
 
