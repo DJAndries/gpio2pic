@@ -1,0 +1,14 @@
+enterp
+loadd 2e
+prog
+inc
+loadd 7
+prog
+exitp
+enterp
+readd
+inc
+readd
+reset
+readd
+exitp

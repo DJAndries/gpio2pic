@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include "log.h"
 #include "cmd.h"
 
@@ -16,23 +17,24 @@
 struct hex_entry {
 	size_t length;
 	size_t address;
+	char type;
 	char* data;
 	char calc_checksum;
 };
 typedef struct hex_entry hex_entry;
 
 static int validate_checksum(FILE* fp, hex_entry* entry) {
-	size_t i;
 	char checksum_hex[3];
 	char checksum;
 	if (fread(checksum_hex, sizeof(char), 2, fp) != 2) {
 		return 1;
 	}
 	checksum_hex[2] = 0;
-	if (sscanf(checksum_hex, "%x", &checksum) != 1) {
+	if (sscanf(checksum_hex, "%hhx", &checksum) != 1) {
 		return 2;
 	}
 	entry->calc_checksum = (~entry->calc_checksum) + 1;
+	dlog(LOG_DEBUG, "Calc checksum = %x", entry->calc_checksum);
 	if (checksum != entry->calc_checksum) {
 		return 3;
 	}
@@ -54,12 +56,12 @@ static int read_hex_entry_data(FILE* fp, hex_entry* entry) {
 			free(entry->data);
 			return 2;
 		}
-		if (sscanf(data_hex, "%x", &dec_data) != 1) {
+		data_hex[2] = 0;
+		if (sscanf(data_hex, "%hhx", &dec_data) != 1) {
 			dlog(LOG_DEBUG, "Unable to decode hex byte of data");
 			free(entry->data);
 			return 3;
 		}
-		dec_data[2] = 0;
 		*(entry->data + i) = dec_data;
 		entry->calc_checksum += dec_data;
 	}
@@ -73,9 +75,16 @@ static int read_hex_entry_data(FILE* fp, hex_entry* entry) {
 
 static int read_hex_entry(FILE* fp, hex_entry* entry) {
 	entry->calc_checksum = 0;
-	char buf[16];
+	char buf[8];
 	/* start code */
-	if (fread(buf, sizeof(char), 1, fp) != 1 || buf[0] != ':') {
+	if (fread(buf, sizeof(char), 1, fp) != 1) {
+		if (feof(fp)) {
+			return -1;
+		}
+		dlog(LOG_DEBUG, "Bad start code");
+		return 1;
+	}
+	if (buf[0] != ':') {
 		dlog(LOG_DEBUG, "Bad start code");
 		return 1;
 	}
@@ -91,7 +100,7 @@ static int read_hex_entry(FILE* fp, hex_entry* entry) {
 	}
 	entry->calc_checksum += entry->length & 0xFF;
 	/* byte address */
-	if (fread(buf, sizeof(char), 4, fp) != 2) {
+	if (fread(buf, sizeof(char), 4, fp) != 4) {
 		dlog(LOG_DEBUG, "Bad byte address");
 		return 4;
 	}
@@ -102,12 +111,12 @@ static int read_hex_entry(FILE* fp, hex_entry* entry) {
 	}
 	entry->calc_checksum += (entry->address & 0xFF) + (entry->address >> 8);
 	/* record type */
-	if (fread(buf, sizeof(char), 2, fp) != 1) {
+	if (fread(buf, sizeof(char), 2, fp) != 2) {
 		dlog(LOG_DEBUG, "Bad record type");
 		return 6;
 	}
 	buf[2] = 0;
-	if (sscanf(buf, "%x", &entry->type) != 1) {
+	if (sscanf(buf, "%hhx", &entry->type) != 1) {
 		dlog(LOG_DEBUG, "Bad entry type hex");
 		return 7;
 	}
@@ -117,6 +126,8 @@ static int read_hex_entry(FILE* fp, hex_entry* entry) {
 	if (read_hex_entry_data(fp, entry)) {
 		return 8;
 	}
+	/* waste the new line */
+	fread(buf, sizeof(char), 1, fp);
 	return 0;
 }
 
@@ -129,7 +140,6 @@ static int prog_hex_entry(hex_entry* entry) {
 	if (conv_addr >= EEPROM_START) {
 		is_eeprom = 1;
 		conv_addr -= EEPROM_START;
-		return 1;
 	}
 
 	if (entry->type != TYPE_DATA) {
@@ -144,8 +154,8 @@ static int prog_hex_entry(hex_entry* entry) {
 		}
 	}
 
-	for (i = 0; i < entry->length; i++) {
-		data = *(((uint16_t*)entry->data) + i);
+	for (i = 0; i < (entry->length / 2); i++) {
+		data = *(entry->data + (i * 2)) | (*(entry->data + (i * 2) + 1) << 8);
 		if (is_eeprom) {
 			if (write_to_user_data(data) || begin_programming() ||
 					read_from_user_data(&verify_data)) {
@@ -163,7 +173,8 @@ static int prog_hex_entry(hex_entry* entry) {
 				return 3;
 			}
 			if (verify_data != data) {
-				dlog(LOG_DEBUG, "Failed to verify prog data");
+				dlog(LOG_DEBUG, "Failed to verify prog data. actual = %x, expect = %x",
+						verify_data, data);
 				return 4;
 			}
 		}
@@ -178,6 +189,7 @@ static int prog_hex_entry(hex_entry* entry) {
 int program_hex_file(const char* filename) {
 	FILE* fp;
 	hex_entry entry;
+	int read_result;
 	
 	if ((fp = fopen(filename, "r")) == 0) {
 		dlog(LOG_ERROR, "Failed to open hex file");
@@ -189,23 +201,27 @@ int program_hex_file(const char* filename) {
 		fclose(fp);
 		return 2;
 	}
-	while (!feof(fp)) {
-		if (read_hex_entry(fp, &entry)) {
-			dlog(LOG_ERROR, "Failed to read hex entry");
-			fclose(fp);
-			return 3;
-		}
+	while ((read_result = read_hex_entry(fp, &entry)) == 0) {
 		if (prog_hex_entry(&entry)) {
 			dlog(LOG_ERROR, "Failed to program hex entry");
 			free(entry.data);
+			set_prog_mode(0);
 			fclose(fp);
 			return 4;
 		}
 		free(entry.data);
 		if (trigger_reset()) {
 			dlog(LOG_ERROR, "Failed to trigger reset");
+			set_prog_mode(0);
+			fclose(fp);
 			return 5;
 		}
+	}
+	if (read_result > 0) {
+		dlog(LOG_ERROR, "Failed to read hex entry");
+		set_prog_mode(0);
+		fclose(fp);
+		return 3;
 	}
 	fclose(fp);
 	if (set_prog_mode(0)) {
