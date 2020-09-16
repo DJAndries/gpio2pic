@@ -1,0 +1,4 @@
+- add debugger
+- add configuration programming
+- configurable gpio pins
+- arg parser with gpio, invert io option

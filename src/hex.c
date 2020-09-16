@@ -131,7 +131,7 @@ static int read_hex_entry(FILE* fp, hex_entry* entry) {
 	return 0;
 }
 
-static int prog_hex_entry(hex_entry* entry) {
+static int prog_hex_entry(hex_entry* entry, size_t* current_addr) {
 	size_t i;
 	size_t conv_addr = entry->address / 2;
 	char is_eeprom = 0;
@@ -147,15 +147,22 @@ static int prog_hex_entry(hex_entry* entry) {
 		return 0;
 	}
 
-	for (i = 0; i < conv_addr; i++) {
-		if (inc_addr()) {
-			dlog(LOG_DEBUG, "Failed to increment addr");
+	if (*current_addr != conv_addr) {
+		if (trigger_reset()) {
+			dlog(LOG_DEBUG, "Failed to trigger reset");
 			return 2;
+		}
+		*current_addr = conv_addr;
+		for (i = 0; i < conv_addr; i++) {
+			if (inc_addr()) {
+				dlog(LOG_DEBUG, "Failed to increment addr");
+				return 2;
+			}
 		}
 	}
 
-	for (i = 0; i < (entry->length / 2); i++) {
-		data = *(entry->data + (i * 2)) | (*(entry->data + (i * 2) + 1) << 8);
+	for (i = 0; i < entry->length; i += 2) {
+		data = *(entry->data + i) | (*(entry->data + i + 1) << 8);
 		if (is_eeprom) {
 			if (write_to_user_data(data) || begin_programming() ||
 					read_from_user_data(&verify_data)) {
@@ -182,6 +189,7 @@ static int prog_hex_entry(hex_entry* entry) {
 			dlog(LOG_DEBUG, "Failed to increment addr");
 			return 2;
 		}
+		(*current_addr)++;
 	}
 	return 0;
 }
@@ -190,6 +198,7 @@ int program_hex_file(const char* filename) {
 	FILE* fp;
 	hex_entry entry;
 	int read_result;
+	size_t current_addr = 0;
 	
 	if ((fp = fopen(filename, "r")) == 0) {
 		dlog(LOG_ERROR, "Failed to open hex file");
@@ -202,7 +211,7 @@ int program_hex_file(const char* filename) {
 		return 2;
 	}
 	while ((read_result = read_hex_entry(fp, &entry)) == 0) {
-		if (prog_hex_entry(&entry)) {
+		if (prog_hex_entry(&entry, &current_addr)) {
 			dlog(LOG_ERROR, "Failed to program hex entry");
 			free(entry.data);
 			set_prog_mode(0);
@@ -210,12 +219,6 @@ int program_hex_file(const char* filename) {
 			return 4;
 		}
 		free(entry.data);
-		if (trigger_reset()) {
-			dlog(LOG_ERROR, "Failed to trigger reset");
-			set_prog_mode(0);
-			fclose(fp);
-			return 5;
-		}
 	}
 	if (read_result > 0) {
 		dlog(LOG_ERROR, "Failed to read hex entry");

@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define LINE_SZ 256
 #define LOAD_PROG "loadp"
@@ -13,10 +16,13 @@
 #define READ_DATA "readd"
 #define INC_ADDR "inc"
 #define BEGIN_PROG "prog"
+#define PROG_RESET "prog_reset"
 #define RESET "reset"
+#define START "start"
 #define ENTER_PROG_MODE "enterp"
 #define EXIT_PROG_MODE "exitp"
 #define PROG_HEX "hex"
+#define PROG_HEX_DEV "hexdev"
 #define RUN_BATCH "runbatch"
 #define EXIT "exit"
 #define REPEAT "r"
@@ -24,6 +30,12 @@
 static char cmd[LINE_SZ];
 static char arg[LINE_SZ];
 static uint16_t data;
+
+static volatile int is_watching = 0;
+
+static void int_handler(int v) {
+	is_watching = 0;
+}
 
 static int process_cmd();
 
@@ -37,7 +49,7 @@ static int request_cmd(FILE* in_stream) {
 		return 0;
 	}
 	result = sscanf(line, "%s %s\n", cmd, arg);
-	if (result == 0) {
+	if (result <= 0) {
 		cmd[0] = 0;
 		arg[0] = 0;
 		return 2;
@@ -57,7 +69,7 @@ static int parse_hex_data() {
 		return 2;
 	}
 	return 0;
-}
+} 
 
 static int run_batch_file() {
 	FILE* batch_fd;
@@ -89,6 +101,36 @@ static int process_hex_file() {
 	return program_hex_file(arg);
 }
 
+static int watch_hex_file() {
+	time_t last_mod = 0;
+	struct stat stat_result;
+	is_watching = 1;
+	signal(SIGINT, int_handler);
+	dlog(LOG_INFO, "Watching file. Use CTRL-C to stop watching.");
+	while (is_watching) {
+		if (stat(arg, &stat_result)) {
+			dlog(LOG_ERROR, "Cannot stat hex file");
+			signal(SIGINT, 0);
+			return 1;
+		}
+		if (last_mod > 0 && last_mod != stat_result.st_mtime) {
+			dlog(LOG_INFO, "File change detected. Resetting...");
+			control_exec(0);
+			dlog(LOG_INFO, "Programming...");
+			if (process_hex_file()) {
+				signal(SIGINT, 0);
+				return 2;
+			}
+			dlog(LOG_INFO, "Starting...");
+			control_exec(1);
+		}
+		last_mod = stat_result.st_mtime;
+		usleep(250000);
+	}
+	signal(SIGINT, 0);
+	return 0;
+}
+
 static int process_cmd() {
 	if (strcmp(cmd, LOAD_PROG) == 0) {
 		if (parse_hex_data()) return 2;
@@ -114,8 +156,19 @@ static int process_cmd() {
 		run_batch_file();
 	} else if (strcmp(cmd, PROG_HEX) == 0) {
 		process_hex_file();
-	} else if (strcmp(cmd, RESET) == 0) {
+	} else if (strcmp(cmd, PROG_HEX_DEV) == 0) {
+		dlog(LOG_INFO, "Programming...");
+		if (process_hex_file() == 0) {
+			dlog(LOG_INFO, "Starting...");
+			control_exec(1);
+			watch_hex_file();
+		}
+	} else if (strcmp(cmd, PROG_RESET) == 0) {
 		trigger_reset();
+	} else if (strcmp(cmd, RESET) == 0) {
+		control_exec(0);
+	} else if (strcmp(cmd, START) == 0) {
+		control_exec(1);
 	} else if (strcmp(cmd, EXIT) == 0) {
 		return -1;
 	} else {

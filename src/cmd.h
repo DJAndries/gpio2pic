@@ -18,6 +18,8 @@ int set_prog_mode(char on);
 
 int trigger_reset();
 
+int control_exec(int is_running);
+
 int begin_programming();
 
 int inc_addr();

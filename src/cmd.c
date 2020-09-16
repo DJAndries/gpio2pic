@@ -103,9 +103,13 @@ int trigger_reset() {
 	return 0;
 }
 
+int control_exec(int is_running) {
+	return set_mclr_line(is_running);
+}
+
 int begin_programming() {
 	if (send_with_clock(BEGIN_PROGRAM, CMD_BITS)) return 1;
-	usleep(8000);
+	usleep(6000);
 	return 0;
 }
 
