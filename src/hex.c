@@ -13,6 +13,8 @@
 #define TYPE_EX_LIN_ADDR 0x04
 #define TYPE_STRT_LIN_ADDR 0x05
 #define EEPROM_START 0x2100
+#define CONFIG_START 0x2000
+#define CONFIG_END 0x2007
 
 struct hex_entry {
 	size_t length;
@@ -131,35 +133,9 @@ static int read_hex_entry(FILE* fp, hex_entry* entry) {
 	return 0;
 }
 
-static int prog_hex_entry(hex_entry* entry, size_t* current_addr) {
-	size_t i;
-	size_t conv_addr = entry->address / 2;
-	char is_eeprom = 0;
+static int prog_hex_entry_write(hex_entry* entry, size_t* current_addr, size_t conv_addr, char is_eeprom) {
 	uint16_t data, verify_data;
-
-	if (conv_addr >= EEPROM_START) {
-		is_eeprom = 1;
-		conv_addr -= EEPROM_START;
-	}
-
-	if (entry->type != TYPE_DATA) {
-		/* Ignore non data entries */
-		return 0;
-	}
-
-	if (*current_addr != conv_addr) {
-		if (trigger_reset()) {
-			dlog(LOG_DEBUG, "Failed to trigger reset");
-			return 2;
-		}
-		*current_addr = conv_addr;
-		for (i = 0; i < conv_addr; i++) {
-			if (inc_addr()) {
-				dlog(LOG_DEBUG, "Failed to increment addr");
-				return 2;
-			}
-		}
-	}
+	size_t i;
 
 	for (i = 0; i < entry->length; i += 2) {
 		data = *(entry->data + i) | (*(entry->data + i + 1) << 8);
@@ -190,7 +166,57 @@ static int prog_hex_entry(hex_entry* entry, size_t* current_addr) {
 			return 2;
 		}
 		(*current_addr)++;
+		if (conv_addr == 0x1fff) {
+			*current_addr = 0;
+		}
 	}
+	return 0;
+}
+
+static int prog_hex_entry(hex_entry* entry, size_t* current_addr) {
+	size_t i;
+	size_t conv_addr = entry->address / 2;
+	char is_eeprom = 0;
+	char is_config = 0;
+
+	if (conv_addr >= EEPROM_START) {
+		is_eeprom = 1;
+		conv_addr -= EEPROM_START;
+	}
+
+	if (conv_addr >= CONFIG_START && !is_eeprom) {
+		is_config = 1;
+		conv_addr -= CONFIG_START;
+	}
+
+	if (entry->type != TYPE_DATA) {
+		/* Ignore non data entries */
+		return 0;
+	}
+
+	if (*current_addr != conv_addr) {
+		if (trigger_reset()) {
+			dlog(LOG_DEBUG, "Failed to trigger reset");
+			return 2;
+		}
+		if (is_config) {
+			if (load_config_data(0x3fff)) {
+				dlog(LOG_DEBUG, "Failed to load config data");
+				return 3;
+			}
+		}
+		*current_addr = conv_addr;
+		for (i = 0; i < conv_addr; i++) {
+			if (inc_addr()) {
+				dlog(LOG_DEBUG, "Failed to increment addr");
+				return 4;
+			}
+		}
+		
+	}
+
+	if (prog_hex_entry_write(entry, current_addr, conv_addr, is_eeprom)) return 5;
+
 	return 0;
 }
 

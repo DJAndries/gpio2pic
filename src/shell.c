@@ -2,6 +2,7 @@
 #include "log.h"
 #include "cmd.h"
 #include "hex.h"
+#include "help.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -12,6 +13,7 @@
 #define LINE_SZ 256
 #define LOAD_PROG "loadp"
 #define LOAD_DATA "loadd"
+#define LOAD_CONFIG "loadc"
 #define READ_PROG "readp"
 #define READ_DATA "readd"
 #define INC_ADDR "inc"
@@ -23,8 +25,10 @@
 #define EXIT_PROG_MODE "exitp"
 #define PROG_HEX "hex"
 #define PROG_HEX_DEV "hexdev"
+#define PROTECTED_ERASE "protected_erase"
 #define RUN_BATCH "runbatch"
 #define EXIT "exit"
+#define HELP "help"
 #define REPEAT "r"
 
 static char cmd[LINE_SZ];
@@ -163,14 +167,21 @@ static int process_cmd() {
 			control_exec(1);
 			watch_hex_file();
 		}
+	} else if (strcmp(cmd, LOAD_CONFIG) == 0) {
+		if (parse_hex_data()) return 2;
+		load_config_data(data);
 	} else if (strcmp(cmd, PROG_RESET) == 0) {
 		trigger_reset();
+	} else if (strcmp(cmd, PROTECTED_ERASE) == 0) {
+		protected_erase();
 	} else if (strcmp(cmd, RESET) == 0) {
 		control_exec(0);
 	} else if (strcmp(cmd, START) == 0) {
 		control_exec(1);
 	} else if (strcmp(cmd, EXIT) == 0) {
 		return -1;
+	} else if (strcmp(cmd, HELP) == 0) {
+		print_full_help();
 	} else {
 		dlog(LOG_ERROR, "Command not recognized");
 		return 1;

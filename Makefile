@@ -20,3 +20,4 @@ clean:
 
 install: bin/gpio2pic
 	install -m 755 ./bin/gpio2pic /usr/local/bin/
+	(ls /etc/gpio2pic.conf 2> /dev/null) || install -m 644 ./etc/gpio2pic.conf /etc/

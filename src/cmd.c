@@ -1,5 +1,6 @@
 #include "cmd.h"
 #include <unistd.h>
+#include <time.h>
 #include "gpio.h"
 #include "log.h"
 
@@ -7,16 +8,42 @@
 #define LOAD_PROG_DATA 0x02
 #define READ_USER_DATA 0x05
 #define READ_PROG_DATA 0x04
+#define BULK_ERASE_1 0x01
+#define BULK_ERASE_2 0x07
+#define LOAD_CONFIG_DATA 0x0
 #define INC_ADDR 0x06
 #define BEGIN_PROGRAM 0x08
 #define CMD_BITS 6
 #define DATA_BITS 16
 
-static unsigned long period_us;
+static struct timespec last_wait_time = { 0, 0 };
 
-static void period_sleep() {
-	dlog(LOG_DEBUG, "Wait %lu us", period_us / 2);
-	usleep(period_us / 2);
+static void period_wait() {
+	struct timespec req;
+	long wait_ns = 0;
+	int is_checking = 1;
+
+	while (1) {
+		if (clock_gettime(CLOCK_REALTIME, &req)) {
+			return;
+		}
+
+		if (req.tv_sec > last_wait_time.tv_sec) {
+			wait_ns = 1000000000;
+		}
+		wait_ns = wait_ns + req.tv_nsec - last_wait_time.tv_nsec;
+
+		if (is_checking) {
+			last_wait_time = req;
+			is_checking = 0;
+		}
+		
+		if (wait_ns > 100) {
+			return;
+		}
+	}
+	
+	period_wait();
 }
 
 static int send_with_clock(uint16_t data, size_t bit_length) {
@@ -27,7 +54,7 @@ static int send_with_clock(uint16_t data, size_t bit_length) {
 			if (set_data_line(data & 0x01)) return 2;
 			data >>= 1;
 		}
-		period_sleep();
+		period_wait(0);
 	}
 	return 0;
 }
@@ -47,13 +74,9 @@ static int read_with_clock(uint16_t* data) {
 		} else if (i == 30) {
 			if (switch_data_to_output()) return 3;
 		}
-		period_sleep();
+		period_wait(0);
 	}
 	return 0;
-}
-
-void init_cmd(unsigned long period_us_init) {
-	period_us = period_us_init;
 }
 
 int write_to_user_data(uint16_t data) {
@@ -109,11 +132,33 @@ int control_exec(int is_running) {
 
 int begin_programming() {
 	if (send_with_clock(BEGIN_PROGRAM, CMD_BITS)) return 1;
-	usleep(6000);
+	usleep(5000);
 	return 0;
 }
 
 int inc_addr() {
 	if (send_with_clock(INC_ADDR, CMD_BITS)) return 1;
+	return 0;
+}
+
+int load_config_data(uint16_t data) {
+	data <<= 1;
+	if (send_with_clock(LOAD_CONFIG_DATA, CMD_BITS)) return 1;
+	if (send_with_clock(data, DATA_BITS)) return 2;
+	return 0;
+}
+
+int protected_erase() {
+	size_t i;
+	if (load_config_data(0x3FFF)) return 1;
+	for (i = 0; i < 7; i++) {
+		if (inc_addr()) return 2;
+	}
+	if (send_with_clock(BULK_ERASE_1, CMD_BITS)) return 3;
+	if (send_with_clock(BULK_ERASE_2, CMD_BITS)) return 3;
+	if (begin_programming()) return 4;
+	usleep(8000);
+	if (send_with_clock(BULK_ERASE_1, CMD_BITS)) return 3;
+	if (send_with_clock(BULK_ERASE_2, CMD_BITS)) return 3;
 	return 0;
 }

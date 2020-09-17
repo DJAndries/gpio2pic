@@ -1,7 +1,9 @@
 #ifndef GPIO_H
 #define GPIO_H
 
-int init_gpio(int clock_line_offset, int data_line_offset, int pgm_line_offset, int mclr_line_offset, char inv_out);
+#include "config.h"
+
+int init_gpio(gpio2pic_config* config);
 
 int flip_clock();
 
