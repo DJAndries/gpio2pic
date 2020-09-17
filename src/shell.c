@@ -191,7 +191,7 @@ static int process_cmd() {
 
 int start_shell() {
 	while (1) {
-		printf("gpio2pic> ");
+		printf("\x1B[36mgpio2pic\x1B[0m> ");
 		if (request_cmd(stdin)) {
 			dlog(LOG_ERROR, "Bad command input");
 			continue;
