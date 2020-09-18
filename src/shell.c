@@ -21,10 +21,11 @@
 #define PROG_RESET "prog_reset"
 #define RESET "reset"
 #define START "start"
+#define HEX_START "hexstart"
 #define ENTER_PROG_MODE "enterp"
 #define EXIT_PROG_MODE "exitp"
 #define PROG_HEX "hex"
-#define PROG_HEX_DEV "hexdev"
+#define PROG_HEX_DEV "hexwatch"
 #define PROTECTED_ERASE "protected_erase"
 #define RUN_BATCH "runbatch"
 #define EXIT "exit"
@@ -105,6 +106,20 @@ static int process_hex_file() {
 	return program_hex_file(arg);
 }
 
+static int prog_start_hex_file() {
+	dlog(LOG_INFO, "Programming...");
+	if (process_hex_file()) return 1;
+	signal(SIGINT, int_handler);
+	is_watching = 1;
+	dlog(LOG_INFO, "Starting. Use CTRL-C to reset");
+	control_exec(1);
+	while (is_watching) {
+		usleep(250000);
+	}
+	control_exec(0);
+	return 0;
+}
+
 static int watch_hex_file() {
 	time_t last_mod = 0;
 	struct stat stat_result;
@@ -172,6 +187,8 @@ static int process_cmd() {
 		load_config_data(data);
 	} else if (strcmp(cmd, PROG_RESET) == 0) {
 		trigger_reset();
+	} else if (strcmp(cmd, HEX_START) == 0) {
+		prog_start_hex_file();
 	} else if (strcmp(cmd, PROTECTED_ERASE) == 0) {
 		protected_erase();
 	} else if (strcmp(cmd, RESET) == 0) {

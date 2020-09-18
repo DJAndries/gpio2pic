@@ -1,1 +1,2 @@
 - add debugger
+- add hexstart: programs and starts, ctrlc to reset
