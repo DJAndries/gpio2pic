@@ -16,34 +16,29 @@
 #define CMD_BITS 6
 #define DATA_BITS 16
 
-static struct timespec last_wait_time = { 0, 0 };
-
 static void period_wait() {
+	struct timespec begin;
 	struct timespec req;
 	long wait_ns = 0;
-	int is_checking = 1;
+
+	if (clock_gettime(CLOCK_REALTIME, &begin)) {
+		return;
+	}
 
 	while (1) {
 		if (clock_gettime(CLOCK_REALTIME, &req)) {
 			return;
 		}
 
-		if (req.tv_sec > last_wait_time.tv_sec) {
+		if (req.tv_sec > begin.tv_sec) {
 			wait_ns = 1000000000;
 		}
-		wait_ns = wait_ns + req.tv_nsec - last_wait_time.tv_nsec;
+		wait_ns = wait_ns + req.tv_nsec - begin.tv_nsec;
 
-		if (is_checking) {
-			last_wait_time = req;
-			is_checking = 0;
-		}
-		
-		if (wait_ns > 100) {
+		if (wait_ns >= 100) {
 			return;
 		}
 	}
-	
-	period_wait();
 }
 
 static int send_with_clock(uint16_t data, size_t bit_length) {
@@ -54,7 +49,7 @@ static int send_with_clock(uint16_t data, size_t bit_length) {
 			if (set_data_line(data & 0x01)) return 2;
 			data >>= 1;
 		}
-		period_wait(0);
+		period_wait();
 	}
 	return 0;
 }
@@ -74,7 +69,7 @@ static int read_with_clock(uint16_t* data) {
 		} else if (i == 30) {
 			if (switch_data_to_output()) return 3;
 		}
-		period_wait(0);
+		period_wait();
 	}
 	return 0;
 }
@@ -132,7 +127,7 @@ int control_exec(int is_running) {
 
 int begin_programming() {
 	if (send_with_clock(BEGIN_PROGRAM, CMD_BITS)) return 1;
-	usleep(5000);
+	usleep(4500);
 	return 0;
 }
 

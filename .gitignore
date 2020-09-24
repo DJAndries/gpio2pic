@@ -3,3 +3,5 @@ obj
 *.swp
 test/*.cod
 test/*.lst
+firmware/*.cod
+firmware/*.lst

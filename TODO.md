@@ -1,2 +1,4 @@
-- add debugger
-- add hexstart: programs and starts, ctrlc to reset
+- add help for debug
+- add auto debug flag on
+- replace interrupt call with goto in nop slide
+- up arrow

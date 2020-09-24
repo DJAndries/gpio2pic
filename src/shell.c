@@ -3,6 +3,9 @@
 #include "cmd.h"
 #include "hex.h"
 #include "help.h"
+#include "util.h"
+#include "debug_inject.h"
+#include "debug_shell.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -10,7 +13,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define LINE_SZ 256
 #define LOAD_PROG "loadp"
 #define LOAD_DATA "loadd"
 #define LOAD_CONFIG "loadc"
@@ -27,13 +29,14 @@
 #define PROG_HEX "hex"
 #define PROG_HEX_DEV "hexwatch"
 #define PROTECTED_ERASE "protected_erase"
+#define INJECT_DEBUGGER "inject_debugger"
 #define RUN_BATCH "runbatch"
+#define DEBUG "debug"
 #define EXIT "exit"
 #define HELP "help"
-#define REPEAT "r"
 
-static char cmd[LINE_SZ];
-static char arg[LINE_SZ];
+static char cmd[CMD_LINE_SZ];
+static char arg[CMD_LINE_SZ];
 static uint16_t data;
 
 static volatile int is_watching = 0;
@@ -44,41 +47,9 @@ static void int_handler(int v) {
 
 static int process_cmd();
 
-static int request_cmd(FILE* in_stream) {
-	char line[LINE_SZ];
-	int result;
-	if (fgets(line, LINE_SZ, in_stream) == 0) {
-		return 1;
-	}
-	if (strcmp(line, REPEAT "\n") == 0) {
-		return 0;
-	}
-	result = sscanf(line, "%s %s\n", cmd, arg);
-	if (result <= 0) {
-		cmd[0] = 0;
-		arg[0] = 0;
-		return 2;
-	} else if (result == 1) {
-		arg[0] = 0;
-	}
-	return 0;
-}
-
-static int parse_hex_data() {
-	if (arg[0] == 0) {
-		dlog(LOG_ERROR, "Data not provided");
-		return 1;
-	}
-	if (sscanf(arg, "%hx", &data) != 1) {
-		dlog(LOG_ERROR, "Unable to parse hex data");
-		return 2;
-	}
-	return 0;
-} 
-
 static int run_batch_file() {
 	FILE* batch_fd;
-	char batch_filename[LINE_SZ];
+	char batch_filename[CMD_LINE_SZ];
 	if (arg[0] == 0) {
 		dlog(LOG_ERROR, "Batch filename not provided");
 		return 1;
@@ -88,7 +59,7 @@ static int run_batch_file() {
 		dlog(LOG_ERROR, "Failed to open batch file");
 		return 2;
 	}
-	while (request_cmd(batch_fd) != 1) {
+	while (request_cmd(batch_fd, cmd, arg) != 1) {
 		printf("gpio2pic (%s)> %s %s\n", batch_filename, cmd, arg);
 		process_cmd();
 	}
@@ -117,6 +88,7 @@ static int prog_start_hex_file() {
 		usleep(250000);
 	}
 	control_exec(0);
+	signal(SIGINT, 0);
 	return 0;
 }
 
@@ -152,10 +124,10 @@ static int watch_hex_file() {
 
 static int process_cmd() {
 	if (strcmp(cmd, LOAD_PROG) == 0) {
-		if (parse_hex_data()) return 2;
+		if (parse_hex_data(arg, &data)) return 2;
 		write_to_prog_data(data);
 	} else if (strcmp(cmd, LOAD_DATA) == 0) {
-		if (parse_hex_data()) return 2;
+		if (parse_hex_data(arg, &data)) return 2;
 		write_to_user_data(data);
 	} else if (strcmp(cmd, READ_PROG) == 0) {
 		if (read_from_prog_data(&data)) return 3;
@@ -175,6 +147,8 @@ static int process_cmd() {
 		run_batch_file();
 	} else if (strcmp(cmd, PROG_HEX) == 0) {
 		process_hex_file();
+	} else if (strcmp(cmd, INJECT_DEBUGGER) == 0) {
+		inject_debugger();
 	} else if (strcmp(cmd, PROG_HEX_DEV) == 0) {
 		dlog(LOG_INFO, "Programming...");
 		if (process_hex_file() == 0) {
@@ -183,7 +157,7 @@ static int process_cmd() {
 			watch_hex_file();
 		}
 	} else if (strcmp(cmd, LOAD_CONFIG) == 0) {
-		if (parse_hex_data()) return 2;
+		if (parse_hex_data(arg, &data)) return 2;
 		load_config_data(data);
 	} else if (strcmp(cmd, PROG_RESET) == 0) {
 		trigger_reset();
@@ -195,6 +169,8 @@ static int process_cmd() {
 		control_exec(0);
 	} else if (strcmp(cmd, START) == 0) {
 		control_exec(1);
+	} else if (strcmp(cmd, DEBUG) == 0) {
+		start_debug_shell();
 	} else if (strcmp(cmd, EXIT) == 0) {
 		return -1;
 	} else if (strcmp(cmd, HELP) == 0) {
@@ -208,8 +184,8 @@ static int process_cmd() {
 
 int start_shell() {
 	while (1) {
-		printf("\x1B[36mgpio2pic\x1B[0m> ");
-		if (request_cmd(stdin)) {
+		printf("\x1B[34mgpio2pic\x1B[0m> ");
+		if (request_cmd(stdin, cmd, arg)) {
 			dlog(LOG_ERROR, "Bad command input");
 			continue;
 		}
