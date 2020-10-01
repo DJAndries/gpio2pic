@@ -16,6 +16,35 @@ const uint16_t bootstrap_code[] = {
 	0x2740
 };
 
+static int set_debug_flag() {
+	size_t i = 0;
+	uint16_t config;
+	if (load_config_data(0x3FFF)) {
+		dlog(LOG_DEBUG, "Debug inject: failed to load config data");
+		return 1;
+	}
+	for (i = 0; i < 7; i++) {
+		if (inc_addr()) {
+			dlog(LOG_DEBUG, "Debug inject: failed to inc addr");
+			return 2;
+		}
+	}
+	if (read_from_prog_data(&config)) {
+		dlog(LOG_DEBUG, "Debug inject: failed to read from config");
+		return 3;
+	}
+	config &= 0x37FF;
+	if (write_to_prog_data(config)) {
+		dlog(LOG_DEBUG, "Debug inject: failed to write to config");
+		return 4;
+	}
+	if (begin_programming()) {
+		dlog(LOG_DEBUG, "Debug inject: failed to prog config");
+		return 5;
+	}
+	return 0;
+}
+
 static int add_interrupt_bootstrap(size_t noop_addr) {
 	size_t i;
 	if (trigger_reset()) {
@@ -96,6 +125,11 @@ static int inject_interrupt() {
 		return 4;
 	}
 
+	if (set_debug_flag()) {
+		set_prog_mode(0);
+		return 4;
+	}
+
 	if (set_prog_mode(0)) {
 		dlog(LOG_DEBUG, "Debug inject: failed to disable prog mode");
 		return 5;
@@ -113,5 +147,6 @@ int inject_debugger() {
 		dlog(LOG_ERROR, "Debug inject: Failed to inject interrupt bootstrap");
 		return 2;
 	}
+	
 	return 0;
 }

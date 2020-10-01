@@ -24,6 +24,7 @@
 #define RESET "reset"
 #define START "start"
 #define HEX_START "hexstart"
+#define HEX_DEBUG "hexdebug"
 #define ENTER_PROG_MODE "enterp"
 #define EXIT_PROG_MODE "exitp"
 #define PROG_HEX "hex"
@@ -36,7 +37,8 @@
 #define HELP "help"
 
 static char cmd[CMD_LINE_SZ];
-static char arg[CMD_LINE_SZ];
+static char arg1[CMD_LINE_SZ];
+static char arg2[CMD_LINE_SZ];
 static uint16_t data;
 
 static volatile int is_watching = 0;
@@ -50,31 +52,31 @@ static int process_cmd();
 static int run_batch_file() {
 	FILE* batch_fd;
 	char batch_filename[CMD_LINE_SZ];
-	if (arg[0] == 0) {
+	if (arg1[0] == 0) {
 		dlog(LOG_ERROR, "Batch filename not provided");
 		return 1;
 	}
-	strcpy(batch_filename, arg);
+	strcpy(batch_filename, arg1);
 	if ((batch_fd = fopen(batch_filename, "r")) == 0) {
 		dlog(LOG_ERROR, "Failed to open batch file");
 		return 2;
 	}
-	while (request_cmd(batch_fd, cmd, arg) != 1) {
-		printf("gpio2pic (%s)> %s %s\n", batch_filename, cmd, arg);
+	while (request_cmd(batch_fd, cmd, arg1, arg2) != 1) {
+		printf("gpio2pic (%s)> %s %s %s\n", batch_filename, cmd, arg1, arg2);
 		process_cmd();
 	}
 	fclose(batch_fd);
 	strcpy(cmd, "runbatch");
-	strcpy(arg, batch_filename);
+	strcpy(arg1, batch_filename);
 	return 0;
 }
 
 static int process_hex_file() {
-	if (arg[0] == 0) { 
+	if (arg1[0] == 0) { 
 		dlog(LOG_ERROR, "Hex filename not provided");
 		return 1;
 	}
-	return program_hex_file(arg);
+	return program_hex_file(arg1);
 }
 
 static int prog_start_hex_file() {
@@ -99,7 +101,7 @@ static int watch_hex_file() {
 	signal(SIGINT, int_handler);
 	dlog(LOG_INFO, "Watching file. Use CTRL-C to stop watching.");
 	while (is_watching) {
-		if (stat(arg, &stat_result)) {
+		if (stat(arg1, &stat_result)) {
 			dlog(LOG_ERROR, "Cannot stat hex file");
 			signal(SIGINT, 0);
 			return 1;
@@ -124,10 +126,10 @@ static int watch_hex_file() {
 
 static int process_cmd() {
 	if (strcmp(cmd, LOAD_PROG) == 0) {
-		if (parse_hex_data(arg, &data)) return 2;
+		if (parse_hex_data(arg1, &data)) return 2;
 		write_to_prog_data(data);
 	} else if (strcmp(cmd, LOAD_DATA) == 0) {
-		if (parse_hex_data(arg, &data)) return 2;
+		if (parse_hex_data(arg1, &data)) return 2;
 		write_to_user_data(data);
 	} else if (strcmp(cmd, READ_PROG) == 0) {
 		if (read_from_prog_data(&data)) return 3;
@@ -157,12 +159,16 @@ static int process_cmd() {
 			watch_hex_file();
 		}
 	} else if (strcmp(cmd, LOAD_CONFIG) == 0) {
-		if (parse_hex_data(arg, &data)) return 2;
+		if (parse_hex_data(arg1, &data)) return 2;
 		load_config_data(data);
 	} else if (strcmp(cmd, PROG_RESET) == 0) {
 		trigger_reset();
 	} else if (strcmp(cmd, HEX_START) == 0) {
 		prog_start_hex_file();
+	} else if (strcmp(cmd, HEX_DEBUG) == 0) {
+		if (process_hex_file()) return 3;
+		if (inject_debugger()) return 3;
+		start_debug_shell(arg2[0] ? arg2 : 0);
 	} else if (strcmp(cmd, PROTECTED_ERASE) == 0) {
 		protected_erase();
 	} else if (strcmp(cmd, RESET) == 0) {
@@ -170,7 +176,7 @@ static int process_cmd() {
 	} else if (strcmp(cmd, START) == 0) {
 		control_exec(1);
 	} else if (strcmp(cmd, DEBUG) == 0) {
-		start_debug_shell();
+		start_debug_shell(arg1[0] ? arg1 : 0);
 	} else if (strcmp(cmd, EXIT) == 0) {
 		return -1;
 	} else if (strcmp(cmd, HELP) == 0) {
@@ -185,7 +191,7 @@ static int process_cmd() {
 int start_shell() {
 	while (1) {
 		printf("\x1B[34mgpio2pic\x1B[0m> ");
-		if (request_cmd(stdin, cmd, arg)) {
+		if (request_cmd(stdin, cmd, arg1, arg2)) {
 			dlog(LOG_ERROR, "Bad command input");
 			continue;
 		}

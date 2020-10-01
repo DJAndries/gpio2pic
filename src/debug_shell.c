@@ -4,9 +4,11 @@
 #include <signal.h>
 #include "util.h"
 #include "cmd.h"
+#include "debug_lst.h"
 #include "log.h"
 #include "gpio.h"
 #include "debug.h"
+#include "debug_lst.h"
 
 #define NEXT "next"
 #define CONTINUE "continue"
@@ -23,6 +25,36 @@ static int is_inactive = 1;
 
 static void int_handler(int v) {
 	is_halted = 1;
+}
+
+static int display_break_info(const char* lst_filename) {
+	int result;
+	uint16_t addr;
+	char source_line[LST_LINE_SZ];
+	char asm_line[LST_LINE_SZ];
+
+	if (get_break_addr(&addr)) {
+		dlog(LOG_ERROR, "Could not retrieve break addr");
+		return 1;
+	}
+
+	dlog(LOG_INFO, "Break addr: %hx", addr);
+
+	if (lst_filename) {
+		result = resolve_lst_line(lst_filename, addr, source_line, asm_line);
+		if (result < 0) {
+			return 2;
+		} else if (result == 0) {
+			if (source_line[0]) {
+				/* get rid of new line */
+				source_line[strlen(source_line) - 1] = 0;
+				dlog(LOG_INFO, "Source line: %s", source_line);
+			}
+			dlog(LOG_INFO, "Instruction: %s", asm_line);
+		}
+	}
+
+	return 0;
 }
 
 static int process_cmd() {
@@ -45,14 +77,13 @@ static int process_cmd() {
 		return -1;
 	} else {
 		dlog(LOG_ERROR, "Command not recognized");
-		is_inactive = 1;
+		is_inactive = 0;
 		return 1;
 	}
 	return 0;
 }
 
-int start_debug_shell() {
-	uint16_t addr;
+int start_debug_shell(const char* lst_filename) {
 	if (start_debug()) return 1;
 	
 	while (1) {
@@ -67,15 +98,13 @@ int start_debug_shell() {
 			}
 			is_inactive = 0;
 			signal(SIGINT, 0);
-			if (get_break_addr(&addr)) {
-				dlog(LOG_ERROR, "Could not retrieve break addr");
+			if (display_break_info(lst_filename)) {
 				return 2;
 			}
-			dlog(LOG_INFO, "Break addr: %hx", addr);
 		}
 
 		printf("\x1B[35mgpio2pic debug\x1B[0m> ");
-		if (request_cmd(stdin, cmd, arg)) {
+		if (request_cmd(stdin, cmd, arg, arg)) {
 			dlog(LOG_ERROR, "Bad debug command input");
 			continue;
 		}

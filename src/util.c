@@ -2,7 +2,7 @@
 #include <string.h>
 #include "log.h"
 
-int request_cmd(FILE* in_stream, char* cmd, char* arg) {
+int request_cmd(FILE* in_stream, char* cmd, char* arg1, char* arg2) {
 	char line[CMD_LINE_SZ];
 	int result;
 	if (fgets(line, CMD_LINE_SZ, in_stream) == 0) {
@@ -11,13 +11,15 @@ int request_cmd(FILE* in_stream, char* cmd, char* arg) {
 	if (strcmp(line, REPEAT "\n") == 0) {
 		return 0;
 	}
-	result = sscanf(line, "%s %s\n", cmd, arg);
+	result = sscanf(line, "%s %s %s\n", cmd, arg1, arg2);
 	if (result <= 0) {
 		cmd[0] = 0;
-		arg[0] = 0;
+		arg2[0] = arg1[0] = 0;
 		return 2;
 	} else if (result == 1) {
-		arg[0] = 0;
+		arg2[0] = arg1[0] = 0;
+	} else if (result == 2) {
+		arg2[0] = 0;
 	}
 	return 0;
 }
