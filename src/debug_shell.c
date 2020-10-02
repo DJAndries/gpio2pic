@@ -9,12 +9,15 @@
 #include "gpio.h"
 #include "debug.h"
 #include "debug_lst.h"
+#include "help.h"
 
 #define NEXT "next"
 #define CONTINUE "continue"
 #define BREAK "break"
+#define BREAK_SRC "break_src"
 #define READ_RAM "readr"
 #define EXIT "exit"
+#define HELP "help"
 
 static char cmd[CMD_LINE_SZ];
 static char arg[CMD_LINE_SZ];
@@ -41,7 +44,7 @@ static int display_break_info(const char* lst_filename) {
 	dlog(LOG_INFO, "Break addr: %hx", addr);
 
 	if (lst_filename) {
-		result = resolve_lst_line(lst_filename, addr, source_line, asm_line);
+		result = lst_resolve_addr(lst_filename, addr, source_line, asm_line);
 		if (result < 0) {
 			return 2;
 		} else if (result == 0) {
@@ -57,7 +60,26 @@ static int display_break_info(const char* lst_filename) {
 	return 0;
 }
 
-static int process_cmd() {
+static int break_src(const char* lst_filename) {
+	char source_file[CMD_LINE_SZ];
+	unsigned int line_num;
+	uint16_t addr;
+	if (sscanf(arg, "%[^:]:%u", source_file, &line_num) != 2) {
+		dlog(LOG_ERROR, "Invalid source file/line number");
+		return 1;
+	}
+	if (lst_resolve_source_line(lst_filename, source_file, line_num, &addr)) {
+		return 2;
+	}
+	if (break_addr(addr)) {
+		dlog(LOG_ERROR, "Failed to break at address");
+		return 3;
+	}
+	dlog(LOG_INFO, "Set breakpoint at address: %hx", addr);
+	return 0;
+}
+
+static int process_cmd(const char* lst_filename) {
 	uint8_t data_result;
 	is_inactive = 1;
 	if (strcmp(cmd, NEXT) == 0) {
@@ -67,11 +89,16 @@ static int process_cmd() {
 		break_addr(data);
 	} else if (strcmp(cmd, CONTINUE) == 0) {
 		continue_exec();
+	} else if (strcmp(cmd, BREAK_SRC) == 0) {
+		if (break_src(lst_filename)) is_inactive = 0;
 	} else if (strcmp(cmd, READ_RAM) == 0) {
 		if (parse_hex_data(arg, &data)) return 2;
 		if (mem_access(data, &data_result) == 0) {
 			dlog(LOG_INFO, "Data: %hhx", data_result);
 		}
+		is_inactive = 0;
+	} else if (strcmp(cmd, HELP) == 0) {
+		print_debug_help();
 		is_inactive = 0;
 	} else if (strcmp(cmd, EXIT) == 0) {
 		return -1;
@@ -104,12 +131,12 @@ int start_debug_shell(const char* lst_filename) {
 		}
 
 		printf("\x1B[35mgpio2pic debug\x1B[0m> ");
-		if (request_cmd(stdin, cmd, arg, arg)) {
+		if (request_cmd(stdin, cmd, arg, 0)) {
 			dlog(LOG_ERROR, "Bad debug command input");
 			continue;
 		}
 
-		if (process_cmd() < 0) break;
+		if (process_cmd(lst_filename) < 0) break;
 	}
 
 	is_inactive = 1;
