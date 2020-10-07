@@ -28,7 +28,7 @@ context_restore
 	MOVWF PCLATH
 	SWAPF status_save,W
 	MOVWF STATUS
-	SWAPF w_save,f
-	SWAPF w_save,w
+	SWAPF w_save,F
+	SWAPF w_save,W
 	
 	END

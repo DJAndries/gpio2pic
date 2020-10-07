@@ -140,6 +140,10 @@ int start_debug_shell(const char* lst_filename) {
 	}
 
 	is_inactive = 1;
+
+	/* set breakpoint to 0 before exiting */
+	break_addr(0);
+
 	if (stop_debug()) return 1;
 	
 	return 0;
