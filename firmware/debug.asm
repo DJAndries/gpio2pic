@@ -9,18 +9,24 @@ ICKBUG EQU H'000E'
 PORTBALT EQU H'0006'
 TRISBALT EQU H'0006'
 
-count1 EQU H'0020'
-count2 EQU H'0021'
-buf EQU H'0022'
-retadr EQU H'0023'
+retadr EQU H'0020'
+count1 EQU H'0021'
+count2 EQU H'0022'
+buf EQU H'0023'
+fsr_save EQU H'0024'
+pclath_save EQU H'0025'
+status_save EQU H'0026'
+w_save EQU H'007F'
 
+	ORG 0x1F50
 
-	ORG 0x1F40
 debug_handler
+	CLRF STATUS
 	BSF STATUS, RP0
 	BSF STATUS, RP1
+	BCF ICKBUG, 5 ; disable single step
 	BTFSS ICKBUG, INBUG
-	GOTO debug_end 
+	GOTO debug_bypass
 	
 wait_ack
 	BCF STATUS, RP0
@@ -224,17 +230,24 @@ prompt_data_end_lastret
 	GOTO prompt_mem_access_datacollect
 
 debug_end
-	BCF STATUS, RP0
-	BCF STATUS, RP1
-	CLRF PCLATH
-	BSF STATUS, RP0
-	BSF STATUS, RP1
-
-	BCF ICKBUG, 5
-
-	BCF STATUS, RP0
-	BSF PORTBALT, DAT
 	CLRF STATUS
+	BSF STATUS, RP1
+	BSF PORTBALT, DAT
+	BCF STATUS, RP1
+
+	MOVF fsr_save,W
+	MOVWF FSR
+	MOVF pclath_save,W
+	MOVWF PCLATH
+	SWAPF status_save,W
+	MOVWF STATUS
+	SWAPF w_save,f
+	SWAPF w_save,w
 	RETURN
+debug_bypass
+	CLRF PCLATH
+	CLRF STATUS
+	GOTO 0x0F
+
 
 	END

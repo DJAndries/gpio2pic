@@ -3,7 +3,7 @@ SRC_OBJ = $(SRC:src/%.c=obj/%.o)
 
 all: obj bin bin/gpio2pic
 
-firmware: firmware/debug.hex
+firmware: firmware/debug.hex firmware/debug_bootstrap.hex
 
 bin/gpio2pic: $(SRC_OBJ)
 	gcc $(ADD_FLAGS) -lgpiod -o $@ $(SRC_OBJ) 
@@ -19,6 +19,9 @@ bin:
 
 firmware/debug.hex: firmware/debug.asm
 	gpasm ./firmware/debug.asm -o ./firmware/debug.hex
+
+firmware/debug_bootstrap.hex: firmware/debug_bootstrap.asm
+	gpasm ./firmware/debug_bootstrap.asm -o ./firmware/debug_bootstrap.hex
 
 clean:
 	rm -f obj/* bin/*

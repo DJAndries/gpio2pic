@@ -5,16 +5,9 @@
 #include "log.h"
 
 #define DEBUG_FW_FILE "firmware/debug.hex"
+#define DEBUG_BOOTSTRAP_FW_FILE "firmware/debug_bootstrap.hex"
 
-#define BOOTSTRAP_LEN 3
-const uint16_t bootstrap_code[] = {
-	/* bsf pclath, 3 */
-	0x158A,
-	/* bsf pclath, 4 */
-	0x160A,
-	/* call 0x1F40 */
-	0x2740
-};
+#define BOOTSTRAP_LEN 19
 
 static int set_debug_flag() {
 	size_t i = 0;
@@ -45,35 +38,6 @@ static int set_debug_flag() {
 	return 0;
 }
 
-static int add_interrupt_bootstrap(size_t noop_addr) {
-	size_t i;
-	if (trigger_reset()) {
-		dlog(LOG_DEBUG, "Debug inject: failed to reset prog mode");
-		return 1;
-	}
-	for (i = 0; i < noop_addr; i++) {
-		if (inc_addr()) {
-			dlog(LOG_DEBUG, "Debug inject: failed to inc addr");
-			return 2;
-		}
-	}
-	for (i = 0; i < BOOTSTRAP_LEN; i++) {
-		if (write_to_prog_data(bootstrap_code[i])) {
-			dlog(LOG_DEBUG, "Debug inject: failed to write interrupt bootstrap");
-			return 3;
-		}
-		if (begin_programming()) {
-			dlog(LOG_DEBUG, "Debug inject: failed to prog interrupt bootstrap");
-			return 4;
-		}
-		if (inc_addr()) {
-			dlog(LOG_DEBUG, "Debug inject: failed to incr addr");
-			return 5;
-		}
-	}
-	return 0;
-}
-
 static int find_nop_slide(size_t* noop_addr) {
 	size_t i, noop_size = 0;
 	uint16_t read_value;
@@ -83,7 +47,7 @@ static int find_nop_slide(size_t* noop_addr) {
 			return 1;
 		}
 	}
-	for (i = 0; i < 26 && noop_size < BOOTSTRAP_LEN; i++) {
+	for (i = 0; i < 64 && noop_size < BOOTSTRAP_LEN; i++) {
 		if (read_from_prog_data(&read_value)) {
 			dlog(LOG_DEBUG, "Debug inject: failed to read interrupt data");
 			return 2;
@@ -106,7 +70,64 @@ static int find_nop_slide(size_t* noop_addr) {
 	return !noop_size;
 }
 
-static int inject_interrupt() {
+static int shift_interrupt_intro(size_t noop_addr) {
+	size_t i;
+	uint16_t intro_data[64];
+	size_t shift_size = noop_addr - 4;
+
+	if (trigger_reset()) {
+		dlog(LOG_DEBUG, "Debug inject: failed to reset prog mode");
+		return 1;
+	}
+
+	for (i = 0; i < 4; i++) {
+		if (inc_addr()) {
+			dlog(LOG_DEBUG, "Debug inject: failed to inc addr");
+			return 2;
+		}
+	}
+	/* read all interrupt intro bytes, up until the noop slide */
+	for (i = 0; i < shift_size; i++) {
+		if (read_from_prog_data(intro_data + i)) {
+			dlog(LOG_DEBUG, "Debug inject: failed to read interrupt data");
+			return 3;
+		}
+		if (inc_addr()) {
+			dlog(LOG_DEBUG, "Debug inject: failed to inc addr");
+			return 2;
+		}
+	}
+
+	if (trigger_reset()) {
+		dlog(LOG_DEBUG, "Debug inject: failed to reset prog mode");
+		return 1;
+	}
+	/* skip to end of memory space reserved for the debug bootstrap */
+	for (i = 0; i < BOOTSTRAP_LEN + 4; i++) {
+		if (inc_addr()) {
+			dlog(LOG_DEBUG, "Debug inject: failed to inc addr");
+			return 2;
+		}
+	}
+	/* write those bytes, resulting in a shift of BOOTSTRAP_LEN bytes */
+	for (i = 0; i < shift_size; i++) {
+		if (write_to_prog_data(intro_data[i])) {
+			dlog(LOG_DEBUG, "Debug inject: failed to write interrupt shift");
+			return 4;
+		}
+		if (begin_programming()) {
+			dlog(LOG_DEBUG, "Debug inject: failed to prog interrupt shift");
+			return 5;
+		}
+		if (inc_addr()) {
+			dlog(LOG_DEBUG, "Debug inject: failed to inc addr");
+			return 2;
+		}
+	}
+	return 0;
+}
+
+static int prep_inject_interrupt() {
 	size_t noop_addr = 0;
 	if (set_prog_mode(1)) {
 		dlog(LOG_DEBUG, "Debug inject: failed to enable prog mode");
@@ -116,13 +137,13 @@ static int inject_interrupt() {
 	if (find_nop_slide(&noop_addr)) {
 		set_prog_mode(0);
 		dlog(LOG_ERROR, "Debug inject: failed to find nop slide. "
-				"Ensure 6 consecutive nops are included near top of interrupt.");
-		return 3;
+				"Ensure 19 consecutive nops are included near top of interrupt.");
+		return 2;
 	}
 
-	if (add_interrupt_bootstrap(noop_addr)) {
+	if (shift_interrupt_intro(noop_addr)) {
 		set_prog_mode(0);
-		return 4;
+		return 3;
 	}
 
 	if (set_debug_flag()) {
@@ -143,9 +164,13 @@ int inject_debugger() {
 		dlog(LOG_ERROR, "Debug inject: Failed to program debug fw");
 		return 1;
 	}
-	if (inject_interrupt()) {
-		dlog(LOG_ERROR, "Debug inject: Failed to inject interrupt bootstrap");
+	if (prep_inject_interrupt()) {
+		dlog(LOG_ERROR, "Debug inject: Failed to prepare interrupt bootstrap injection");
 		return 2;
+	}
+	if (program_hex_file(DEBUG_BOOTSTRAP_FW_FILE)) {
+		dlog(LOG_ERROR, "Debug inject: Failed to inject interrupt bootstrap");
+		return 3;
 	}
 	
 	return 0;
