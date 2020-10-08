@@ -1,11 +1,14 @@
+#include <unistd.h>
 #include <stdint.h>
 #include "debug_inject.h"
 #include "hex.h"
 #include "cmd.h"
 #include "log.h"
 
-#define DEBUG_FW_FILE "firmware/debug.hex"
-#define DEBUG_BOOTSTRAP_FW_FILE "firmware/debug_bootstrap.hex"
+#define DEBUG_FW_FILE_LOCAL "firmware/debug.hex"
+#define DEBUG_FW_FILE_INSTALL "/usr/local/share/gpio2pic/firmware/debug.hex"
+#define DEBUG_BOOTSTRAP_FW_FILE_LOCAL "firmware/debug_bootstrap.hex"
+#define DEBUG_BOOTSTRAP_FW_FILE_INSTALL "/usr/local/share/gpio2pic/firmware/debug_bootstrap.hex"
 
 #define BOOTSTRAP_LEN 19
 
@@ -160,7 +163,8 @@ static int prep_inject_interrupt() {
 }
 
 int inject_debugger() {
-	if (program_hex_file(DEBUG_FW_FILE)) {
+	if (program_hex_file(access(DEBUG_FW_FILE_LOCAL, F_OK) == 0 ?
+				DEBUG_FW_FILE_LOCAL : DEBUG_FW_FILE_INSTALL)) {
 		dlog(LOG_ERROR, "Debug inject: Failed to program debug fw");
 		return 1;
 	}
@@ -168,7 +172,8 @@ int inject_debugger() {
 		dlog(LOG_ERROR, "Debug inject: Failed to prepare interrupt bootstrap injection");
 		return 2;
 	}
-	if (program_hex_file(DEBUG_BOOTSTRAP_FW_FILE)) {
+	if (program_hex_file(access(DEBUG_BOOTSTRAP_FW_FILE_LOCAL, F_OK) == 0 ?
+				DEBUG_BOOTSTRAP_FW_FILE_LOCAL : DEBUG_BOOTSTRAP_FW_FILE_INSTALL)) {
 		dlog(LOG_ERROR, "Debug inject: Failed to inject interrupt bootstrap");
 		return 3;
 	}

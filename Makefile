@@ -29,3 +29,6 @@ clean:
 install: bin/gpio2pic
 	install -m 755 ./bin/gpio2pic /usr/local/bin/
 	(ls /etc/gpio2pic.conf 2> /dev/null) || install -m 644 ./etc/gpio2pic.conf /etc/
+	install -m 755 -d /usr/local/share/gpio2pic/firmware
+	install -m 644 ./firmware/debug.hex /usr/local/share/gpio2pic/firmware/debug.hex
+	install -m 644 ./firmware/debug_bootstrap.hex /usr/local/share/gpio2pic/firmware/debug_bootstrap.hex
