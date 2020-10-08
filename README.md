@@ -37,3 +37,5 @@ Tested on a Raspberry Pi Zero and a PIC16F876.
 ## Hardware suggestions
 
 ### Level shifting schematic
+
+![Level shifting schematic](docs/levelshift/output.svg)
