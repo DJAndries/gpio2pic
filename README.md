@@ -11,8 +11,8 @@ Run `make` and then `sudo make install`.
 `make firmware` can be used to re-build the debugger firmware.
 
 ### Dependencies
-- libgpiod
-- libreadline
+- libgpiod (install libgpiod-dev for building)
+- libreadline (install libreadline-dev for building)
 
 ## Configuration
 
@@ -27,6 +27,8 @@ By default, these GPIO/PIC pin associations are:
 - MCLR: GPIO 6
 
 The PGM pin configuration can be ignored if using high-voltage programming.
+
+An 'invert' or 'normal' flag is specified for each pin. Setting the 'invert' flag will invert logic levels for the specified pin.
 
 Consider [Hardware suggestions](#hardware-suggestions) if using a Raspberry Pi and/or low-voltage programming.
 
@@ -60,6 +62,8 @@ Run `gpio2pic` and run `help` for a list of commands.
 To program a hex file from the shell, the `hex <hex filename>` command can be run. The `hexstart <hex filename>` can also be used to program the firmware and begin execution within one command. 
 
 For faster development, the `hexwatch <hex filename>` command provides automatic programming and execution restarts upon changes to the hex file.
+
+When programming, any addresses above 0x2100 will be written to the user data EEPROM.
 
 #### Execution control
 
@@ -115,8 +119,6 @@ The `--stack-size 15` option should be passed to SDCC when compiling, so that 0x
 
 #### Operation
 
-...image...
-
 The `hexdebug <hex filename> <lst filename>` command be used to program the user firmware, inject the debugger firmware and start the debugger. While the lst filename parameter is optional, it is recommended for retrieving source code line numbers/text and showing the disassembled instruction during debugger execution.
 
 The `debug <lst filename>` command can be used to start the debugger on a PIC already programmed/debugger injected. Again, the lst filename is optional.
@@ -161,6 +163,12 @@ After program counter transmission, the firmware waits for a command to be sent.
 
 This was tested on a Raspberry Pi Zero and a PIC16F876.
 
+When using a setup similar to the above, a level shifting circuit should be used to convert 3.3V GPIO signals to 5V for the PIC.
+
 ### Level shifting schematic
 
 ![Level shifting schematic](docs/levelshift/output.svg)
+
+N-channel MOSFETs are used for level shifting.
+
+The first three shifters are unidirectional, since PGM, clock and MCLR will always be outputs. Note that these shifters produce inverted logic levels. Set the 'invert' flag in the configuration for these three pins. The data line uses a bidirectional shifter, since the data line switches between input/output.
