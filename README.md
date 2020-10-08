@@ -2,6 +2,8 @@
 
 GPIO based in-circuit programmer/debugger for the PIC16F family.
 
+Tested on the PIC16F876.
+
 ![gpio2pic](docs/demo.png)
 
 ## Build/Installation
