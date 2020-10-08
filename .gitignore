@@ -5,3 +5,5 @@ test/*.cod
 test/*.lst
 firmware/*.cod
 firmware/*.lst
+docs/levelshift/*.lib
+docs/levelshift/*.sch-bak
