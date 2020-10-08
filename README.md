@@ -2,8 +2,7 @@
 
 GPIO based in-circuit programmer/debugger for the PIC16F family.
 
-
-..image..
+![gpio2pic](docs/demo.png)
 
 ## Build/Installation
 
@@ -84,6 +83,8 @@ The `runbatch` command will load and execute a text file containing a list of gp
 
 ### Debugger
 
+![Debugger](docs/demodebug.png)
+
 gpio2pic includes a basic debugger firmware, and user interface. The debugger allows for setting breakpoints, single stepping, reading RAM and pausing execution. The debugger firmware is injected after programming the user firmware.
 
 #### Firmware requirements
@@ -93,6 +94,7 @@ Preparations must be made in the user firmware, in order to be 'injectable'.
 - 1 byte of RAM reserved at address 0x7f (for context saving the W register)
 - 7 bytes of RAM reserved at address 0x20 (for debugger state and context saving the other registers)
 - a NOP slide of 19 bytes at the top of the interrupt function
+- Firmware must not exceed 0x1f50
 
 This should be possible in both Assembly and C. An example in C is provided below.
 
