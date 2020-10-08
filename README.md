@@ -141,7 +141,21 @@ The bootstrap will contain logic for saving/restoring the state of the W, STATUS
 
 #### Debugger communication internals
 
+![debugger communication](docs/debug_comm.png)
 
+When the debugger firmware becomes active, the data line will be set low to notify gpio2pic of an active debugging session. The program will cycle to clock 13 times to retrieve the value of the program counter from the firmware, with the least significant bit being transferred first.
+
+Like ICSP, bit values are latched on the falling edge of the clock.
+
+After program counter transmission, the firmware waits for a command to be sent. The command is between 1 and 2 bits. A command may require an argument which is transferred after the command bits.
+
+##### Command table
+
+| bit 0 | bit 1 | description | argument |
+| ----- | ----- | ----------- | -------- |
+| 0 | | Exit debugger | N/A |
+| 1 | 1 | Set breakpoint & exit | 13 bits, break address (lsb-to-msb); clocked |
+| 1 | 0 | Read RAM memory | 1 bit, bank selector, 8 bits address (lsb-to-msb); clocked |
 
 ## Hardware suggestions
 
