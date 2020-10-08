@@ -130,8 +130,7 @@ int start_debug_shell(const char* lst_filename) {
 			}
 		}
 
-		printf("\x1B[35mgpio2pic debug\x1B[0m> ");
-		if (request_cmd(stdin, cmd, arg, 0)) {
+		if (request_cmd(stdin, "\001\x1B[35m\002gpio2pic debug\001\x1B[0m\002> ", cmd, arg, 0)) {
 			dlog(LOG_ERROR, "Bad debug command input");
 			continue;
 		}

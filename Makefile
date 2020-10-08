@@ -6,7 +6,7 @@ all: obj bin bin/gpio2pic
 firmware: firmware/debug.hex firmware/debug_bootstrap.hex
 
 bin/gpio2pic: $(SRC_OBJ)
-	gcc $(ADD_FLAGS) -lgpiod -o $@ $(SRC_OBJ) 
+	gcc $(ADD_FLAGS) -lgpiod -lreadline -o $@ $(SRC_OBJ) 
 
 obj/%.o: src/%.c
 	gcc $(ADD_FLAGS) -Wall -O -c $< -o $@

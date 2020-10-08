@@ -61,13 +61,11 @@ static int run_batch_file() {
 		dlog(LOG_ERROR, "Failed to open batch file");
 		return 2;
 	}
-	while (request_cmd(batch_fd, cmd, arg1, arg2) != 1) {
+	while (request_cmd(batch_fd, 0, cmd, arg1, arg2) != 1) {
 		printf("gpio2pic (%s)> %s %s %s\n", batch_filename, cmd, arg1, arg2);
 		process_cmd();
 	}
 	fclose(batch_fd);
-	strcpy(cmd, "runbatch");
-	strcpy(arg1, batch_filename);
 	return 0;
 }
 
@@ -190,8 +188,7 @@ static int process_cmd() {
 
 int start_shell() {
 	while (1) {
-		printf("\x1B[34mgpio2pic\x1B[0m> ");
-		if (request_cmd(stdin, cmd, arg1, arg2)) {
+		if (request_cmd(stdin, "\001\x1B[34m\002gpio2pic\001\x1B[0m\002> ", cmd, arg1, arg2)) {
 			dlog(LOG_ERROR, "Bad command input");
 			continue;
 		}
