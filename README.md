@@ -147,9 +147,9 @@ The bootstrap will contain logic for saving/restoring the state of the W, STATUS
 
 ![debugger communication](docs/debug_comm.png)
 
-When the debugger firmware becomes active, the data line will be set low to notify gpio2pic of an active debugging session. The program will cycle to clock 13 times to retrieve the value of the program counter from the firmware, with the least significant bit being transferred first.
+When the debugger firmware becomes active, the data line will be set low to notify gpio2pic of an active debugging session. The program will cycle the clock 13 times to retrieve the value of the program counter from the firmware, with the least significant bit being transferred first.
 
-Like ICSP, bit values are latched on the falling edge of the clock.
+Bit values are latched on the falling edge of the clock, similar to how ICSP communciation is performed.
 
 After program counter transmission, the firmware waits for a command to be sent. The command is between 1 and 2 bits. A command may require an argument which is transferred after the command bits.
 
